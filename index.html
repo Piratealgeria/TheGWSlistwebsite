@@ -1,40 +1,61 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Viking Algeria | Exploration, Tech, and Visual Stories</title>
-    <meta name="description" content="Exploration, Tech, and Visual Stories. The official blog of Viking Algeria." />
-    <meta name="keywords" content="Viking Algeria, anime music, soundtrack notes, AMV tracklist, anime timestamps, gaming music, YouTube notes, song list, anime timestamps guide, VikingAlgeria" />
+    <title>Viking Algeria — Anime &amp; Gaming Soundtrack Tracklists</title>
+    <meta name="description" content="Explore 102 Viking Algeria Gifs With Sound episodes featuring verified anime &amp; game sources, song credits, and instant-copy tracklist timestamps." />
+    <meta name="keywords" content="Viking Algeria, anime soundtracks, AMV tracklist, anime timestamps, anime OST, gaming soundtracks, song list, anime sources, Demon Slayer, Genshin Impact, Bocchi the Rock, Chainsaw Man, Jujutsu Kaisen" />
     <meta name="author" content="Viking Algeria" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
-    <meta name="theme-color" content="#030303" />
+    <meta name="theme-color" content="#0A0A0C" />
     <link rel="canonical" href="https://vikingalgeria.com/" />
-    
-    <!-- Open Graph / Facebook -->
+    <link rel="alternate" type="application/json+oembed" href="/api/oembed" title="Viking Algeria" />
+
+    <!-- Prevent theme flash before hydration -->
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('viking_theme');
+          var isLight = saved === 'light';
+          var root = document.documentElement;
+          if (isLight) {
+            root.classList.remove('dark');
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', '#F4F1EA');
+          } else {
+            root.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <!-- Open Graph / Social Embeds -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Viking Algeria" />
     <meta property="og:url" content="https://vikingalgeria.com/" />
-    <meta property="og:title" content="Viking Algeria | Exploration, Tech, and Visual Stories" />
-    <meta property="og:description" content="Exploration, Tech, and Visual Stories. The official blog of Viking Algeria." />
-    <meta property="og:image" content="https://picsum.photos/seed/viking/1200/630" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="Viking Algeria - Exploration, Tech, and Visual Stories" />
+    <meta property="og:title" content="Viking Algeria — Anime &amp; Gaming Soundtrack Tracklists" />
+    <meta property="og:description" content="Explore 102 Viking Algeria Gifs With Sound episodes featuring verified anime &amp; game sources, song credits, and instant-copy tracklist timestamps." />
+    <meta property="og:image" content="https://vikingalgeria.com/og-cover.jpg" />
+    <meta property="og:image:secure_url" content="https://vikingalgeria.com/og-cover.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="720" />
+    <meta property="og:image:alt" content="Viking Algeria — Anime &amp; Gaming Soundtrack Archive" />
     <meta property="og:locale" content="en_US" />
 
-    <!-- Twitter -->
+    <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@VikingAlgeria" />
     <meta name="twitter:creator" content="@VikingAlgeria" />
     <meta name="twitter:url" content="https://vikingalgeria.com/" />
-    <meta name="twitter:title" content="Viking Algeria | Exploration, Tech, and Visual Stories" />
-    <meta name="twitter:description" content="Exploration, Tech, and Visual Stories. The official blog of Viking Algeria." />
-    <meta name="twitter:image" content="https://picsum.photos/seed/viking/1200/630" />
-    <meta name="twitter:image:alt" content="Viking Algeria" />
+    <meta name="twitter:title" content="Viking Algeria — Anime &amp; Gaming Soundtrack Tracklists" />
+    <meta name="twitter:description" content="Explore 102 Viking Algeria Gifs With Sound episodes featuring verified anime &amp; game sources, song credits, and instant-copy tracklist timestamps." />
+    <meta name="twitter:image" content="https://vikingalgeria.com/og-cover.jpg" />
+    <meta name="twitter:image:alt" content="Viking Algeria — Anime &amp; Gaming Soundtrack Archive" />
 
     <!-- Schema.org Structured Data -->
-    <script type="application/ld+json">
+    <script type="application/ld+json" id="page-schema-jsonld">
     {
       "@context": "https://schema.org",
       "@graph": [
@@ -43,7 +64,7 @@
           "@id": "https://vikingalgeria.com/#website",
           "url": "https://vikingalgeria.com/",
           "name": "Viking Algeria",
-          "description": "Exploration, Tech, and Visual Stories. The official blog of Viking Algeria.",
+          "description": "Explore 102 Viking Algeria Gifs With Sound episodes featuring verified anime & game sources, song credits, and instant-copy tracklist timestamps.",
           "inLanguage": "en-US",
           "potentialAction": [
             {
@@ -55,6 +76,17 @@
               "query-input": "required name=search_term_string"
             }
           ]
+        },
+        {
+          "@type": "Blog",
+          "@id": "https://vikingalgeria.com/#blog",
+          "url": "https://vikingalgeria.com/",
+          "name": "Viking Algeria Archives",
+          "description": "Curated anime and gaming soundtrack notes, timestamps, and source credits for Viking Algeria Gifs With Sound episodes.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://vikingalgeria.com/#organization"
+          }
         },
         {
           "@type": "Organization",
@@ -77,7 +109,7 @@
       // https://github.com/rafgraph/spa-github-pages
       (function(l) {
         if (l.search[1] === '/' ) {
-          var decoded = l.search.slice(1).split('&').map(function(s) { 
+          var decoded = l.search.slice(1).split('&').map(function(s) {
             return s.replace(/~and~/g, '&')
           }).join('?');
           window.history.replaceState(null, null,
@@ -92,4 +124,3 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

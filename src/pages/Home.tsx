@@ -1,360 +1,824 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { motion } from 'motion/react';
-import { Search, X, Music, ArrowLeft, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import {
+  Search,
+  X,
+  Music,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUpRight,
+  Sun,
+  Moon,
+  List,
+  LayoutGrid,
+} from 'lucide-react';
 import { cn } from '../utils';
 import { PostMetadata } from '../types';
 import { useDebounce } from '../hooks/useDebounce';
+import { useTheme } from '../hooks/useTheme';
 import { PostCard } from '../components/PostCard';
+import { CrateList } from '../components/CrateList';
+import { TopBar } from '../components/TopBar';
 import { fetchPosts } from '../api';
 import { usePageSEO } from '../hooks/usePageSEO';
+import swissPosterFallback from '../assets/images/viking_og_cover_1795291226398.jpg';
 
-const POSTS_PER_PAGE = 6;
+const CRATE_PER_PAGE = 12;
+const GRID_PER_PAGE = 6;
 
 export const Home = () => {
   const [posts, setPosts] = useState<PostMetadata[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const debouncedSearchQuery = useDebounce(searchQuery, 300);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '');
+  const debouncedSearchQuery = useDebounce(searchQuery, 250);
+  const [viewMode, setViewMode] = useState<'crate' | 'grid'>(() => {
+    if (typeof window === 'undefined') return 'crate';
+    try {
+      const saved = localStorage.getItem('viking_view_mode');
+      if (saved === 'grid' || saved === 'crate') return saved;
+    } catch {
+      // Ignore storage error
+    }
+    return 'crate';
+  });
 
   useEffect(() => {
+    try {
+      localStorage.setItem('viking_view_mode', viewMode);
+    } catch {
+      // Ignore storage error
+    }
+  }, [viewMode]);
+  const navigate = useNavigate();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isPlayerOpen, setIsPlayerOpen] = useState(false);
+  const [featuredFallbackTier, setFeaturedFallbackTier] = useState<0 | 1 | 2>(0);
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const archiveSectionRef = useRef<HTMLElement>(null);
+  const isFirstRender = useRef(true);
+  const lastPushedQueryRef = useRef<string>(searchParams.get('q') || '');
+
+  const { theme, toggleTheme } = useTheme();
+
+  useEffect(() => {
+    let cancelled = false;
     fetchPosts()
       .then((data: PostMetadata[]) => {
+        if (cancelled) return;
         setPosts(data);
+        setLoadError(null);
         setLoading(false);
       })
-      .catch(err => {
+      .catch((err) => {
+        if (cancelled) return;
         console.error('Error loading posts:', err);
+        setLoadError('Unable to load the episode archive. Please refresh to retry.');
         setLoading(false);
       });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const seoTitle = debouncedSearchQuery
-    ? `Search: "${debouncedSearchQuery}" | Viking Algeria`
-    : 'Viking Algeria | Exploration, Tech, and Visual Stories';
-  const seoDescription = debouncedSearchQuery
-    ? `Search results for "${debouncedSearchQuery}" across Viking Algeria soundtrack notes and video archives.`
-    : 'Personal notes, soundtrack timestamps, anime resources, and visual stories for the Viking Algeria YouTube channel.';
+  useEffect(() => {
+    const handlePlayerState = (e: Event) => {
+      const detail = (e as CustomEvent<{ isOpen: boolean }>).detail;
+      if (detail && typeof detail.isOpen === 'boolean') {
+        setIsPlayerOpen(detail.isOpen);
+      }
+    };
+    window.addEventListener('music-player-state', handlePlayerState);
+    window.dispatchEvent(new CustomEvent('request-music-player-state'));
+    return () => window.removeEventListener('music-player-state', handlePlayerState);
+  }, []);
+
+  // Sync URL query param -> searchQuery (only on external URL changes such as Back/Forward or tag links)
+  useEffect(() => {
+    const q = searchParams.get('q') || '';
+    if (q !== lastPushedQueryRef.current) {
+      lastPushedQueryRef.current = q;
+      setSearchQuery(q);
+    }
+  }, [searchParams]);
+
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
+    const nextParam = val.trim() ? val : '';
+    lastPushedQueryRef.current = nextParam;
+    if (nextParam) {
+      setSearchParams({ q: nextParam }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  };
+
+  const handleClearSearch = () => {
+    lastPushedQueryRef.current = '';
+    setSearchQuery('');
+    setSearchParams({}, { replace: true });
+  };
+
+  const handleTagSelect = (tag: string) => {
+    if (searchQuery.toLowerCase() === tag.toLowerCase()) {
+      handleClearSearch();
+    } else {
+      handleSearchChange(tag);
+      archiveSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const focusSearch = () => {
+    archiveSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 180);
+  };
+
+  const popularTags = useMemo(() => {
+    const counts = new Map<string, number>();
+    posts.forEach((p) => {
+      (p.tags || []).forEach((t) => {
+        counts.set(t, (counts.get(t) || 0) + 1);
+      });
+    });
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([tag]) => tag);
+  }, [posts]);
+
+  const totalCreditsCount = useMemo(() => {
+    return posts.reduce((sum, p) => sum + (p.tags?.length || 0), 0);
+  }, [posts]);
+
+  const totalTrackCount = useMemo(() => {
+    return posts.reduce((sum, p) => sum + (p.trackCount || 0), 0);
+  }, [posts]);
+
+  const filteredPosts = useMemo(() => {
+    const q = debouncedSearchQuery.trim().toLowerCase();
+    if (!q) return posts;
+    return posts.filter(
+      (post) =>
+        post.title.toLowerCase().includes(q) ||
+        post.id.toLowerCase().includes(q) ||
+        post.excerpt?.toLowerCase().includes(q) ||
+        post.tags?.some((tag) => tag.toLowerCase().includes(q)) ||
+        post.previewTracks?.some((track) => track.toLowerCase().includes(q)) ||
+        post.content?.toLowerCase().includes(q)
+    );
+  }, [posts, debouncedSearchQuery]);
+
+  const origin =
+    typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : 'https://vikingalgeria.com';
+  const trimmedSearch = debouncedSearchQuery.trim();
+  const episodeCount = posts.length || 102;
+  const seoTitle = trimmedSearch
+    ? `${trimmedSearch} Soundtracks & Tracklists | Viking Algeria`
+    : 'Viking Algeria — Anime & Gaming Soundtrack Tracklists';
+  const seoDescription = trimmedSearch
+    ? `Browse ${filteredPosts.length} Viking Algeria episode${filteredPosts.length === 1 ? '' : 's'} matching "${trimmedSearch}" with verified soundtracks and timestamps.`
+    : `Explore ${episodeCount} Viking Algeria Gifs With Sound episodes featuring verified anime & game sources, song credits, and instant-copy tracklist timestamps.`;
+  const seoCanonical = trimmedSearch
+    ? `${origin}/?q=${encodeURIComponent(trimmedSearch)}`
+    : `${origin}/`;
+  const seoImage =
+    trimmedSearch && filteredPosts[0]?.thumbnail && !filteredPosts[0].thumbnail.includes('picsum.photos')
+      ? filteredPosts[0].thumbnail
+      : `${origin}/og-cover.jpg`;
 
   usePageSEO({
+    enabled: !loading,
     title: seoTitle,
     description: seoDescription,
     keywords: [
       'Viking Algeria',
-      'anime music',
-      'soundtrack notes',
-      'AMV tracklist',
+      'anime soundtracks',
+      'AMV music notes',
       'anime timestamps',
-      'gaming songs',
-      'YouTube notes',
-      ...(debouncedSearchQuery ? [debouncedSearchQuery] : [])
+      'gaming soundtrack',
+      'tracklist archive',
+      'song timestamps',
+      'anime music guide',
+      ...popularTags.slice(0, 6),
+      ...(trimmedSearch ? [trimmedSearch] : []),
     ],
-    canonicalUrl: typeof window !== 'undefined' ? `${window.location.origin}/` : 'https://vikingalgeria.com/',
+    canonicalUrl: seoCanonical,
+    image: seoImage,
+    imageAlt: trimmedSearch
+      ? `${trimmedSearch} — Viking Algeria Soundtrack Archive`
+      : 'Viking Algeria — Anime & Gaming Soundtrack Archive',
     schema: {
       '@context': 'https://schema.org',
       '@type': 'CollectionPage',
-      name: 'Viking Algeria Notes Archive',
+      name: trimmedSearch ? `${trimmedSearch} | Viking Algeria` : 'Viking Algeria Soundtrack Archive',
       description: seoDescription,
-      url: 'https://vikingalgeria.com/',
+      url: seoCanonical,
       publisher: {
         '@type': 'Organization',
         name: 'Viking Algeria',
-        url: 'https://vikingalgeria.com/'
-      }
-    }
+        url: `${origin}/`,
+        logo: {
+          '@type': 'ImageObject',
+          url: `${origin}/icon.png`,
+        },
+      },
+    },
   });
 
-  // Reset to first page when searching
+  // Reset pagination when search or view mode changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearchQuery]);
+  }, [debouncedSearchQuery, viewMode]);
 
-  // Global keyboard shortcuts: / or Ctrl/Cmd+K to search, Esc to close
+  // Global keyboard shortcuts: / or Ctrl/Cmd+K to focus search, Esc to clear when focused
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeEl = document.activeElement;
-      const isInputActive = activeEl?.tagName === 'INPUT' || activeEl?.tagName === 'TEXTAREA' || (activeEl as HTMLElement)?.isContentEditable;
+      const isInputActive =
+        activeEl?.tagName === 'INPUT' ||
+        activeEl?.tagName === 'TEXTAREA' ||
+        (activeEl as HTMLElement)?.isContentEditable;
 
-      if ((e.key === '/' || ((e.metaKey || e.ctrlKey) && e.key === 'k')) && !isInputActive) {
+      if ((e.key === '/' || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) && !isInputActive) {
         e.preventDefault();
-        setIsSearchOpen(true);
-      } else if (e.key === 'Escape' && isSearchOpen) {
-        setIsSearchOpen(false);
-        setSearchQuery('');
+        focusSearch();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isSearchOpen]);
+  }, []);
 
-  // Scroll to top on page change
+  // Scroll to archive top on page change (skip initial mount)
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    archiveSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [currentPage]);
 
-  const filteredPosts = useMemo(() => {
-    return posts.filter(post => 
-      post.title.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-      post.excerpt?.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-      post.tags?.some(tag => tag.toLowerCase().includes(debouncedSearchQuery.toLowerCase()))
+  const perPage = viewMode === 'crate' ? CRATE_PER_PAGE : GRID_PER_PAGE;
+  const totalPages = Math.ceil(filteredPosts.length / perPage);
+  const paginatedPosts = filteredPosts.slice((currentPage - 1) * perPage, currentPage * perPage);
+  const featuredPost = posts[0] || null;
+  const rawFeaturedThumb = featuredPost?.thumbnail;
+  const featuredThumb =
+    !rawFeaturedThumb || rawFeaturedThumb.includes('picsum.photos') || featuredFallbackTier >= 2
+      ? swissPosterFallback
+      : featuredFallbackTier === 1 && rawFeaturedThumb.includes('maxresdefault.jpg')
+      ? rawFeaturedThumb.replace('maxresdefault.jpg', 'hqdefault.jpg')
+      : rawFeaturedThumb;
+
+  const openRandomEpisode = () => {
+    if (posts.length === 0) return;
+    const pool = posts.length > 1 ? posts.slice(1) : posts;
+    const random = pool[Math.floor(Math.random() * pool.length)];
+    if (random) navigate(`/post/${random.id}`);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-canvas)] text-[var(--text-primary)]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
+          <span className="font-mono text-xs uppercase tracking-widest text-[var(--text-muted)]">
+            Loading Catalog
+          </span>
+        </div>
+      </div>
     );
-  }, [posts, debouncedSearchQuery]);
-
-  const totalPages = Math.ceil(filteredPosts.length / POSTS_PER_PAGE);
-  const paginatedPosts = filteredPosts.slice(
-    (currentPage - 1) * POSTS_PER_PAGE,
-    currentPage * POSTS_PER_PAGE
-  );
-
-  if (loading) return (
-    <div className="min-h-screen bg-transparent flex items-center justify-center">
-      <motion.div 
-        animate={{ scale: [1, 1.2, 1], rotate: [0, 180, 360] }}
-        transition={{ duration: 2, repeat: Infinity }}
-        className="w-12 h-12 border-2 border-emerald-500 rounded-full border-t-transparent"
-      />
-    </div>
-  );
+  }
 
   return (
-    <div className="min-h-screen bg-transparent text-white flex flex-col relative overflow-hidden font-sans">
-      <div className="flex-grow relative z-10 w-full flex flex-col items-center">
-        <div className="max-w-7xl mx-auto w-full px-4 md:px-8 py-12 md:py-20 flex-1">
-          <header className="mb-16 md:mb-20 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 md:gap-8">
-          <div className="w-full md:w-auto text-center md:text-left mx-auto md:mx-0 flex flex-col items-center md:items-start">
-            <motion.h1 
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-              onClick={() => {
-                setSearchQuery('');
-                setIsSearchOpen(false);
-                setCurrentPage(1);
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className="group text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-display font-bold uppercase tracking-tighter leading-[0.85] mb-6 cursor-pointer transition-opacity whitespace-nowrap relative"
-            >
-              <span className="relative inline-block overflow-hidden">
-                <span className="relative z-10 block group-hover:animate-glitch-1">Viking</span>
-                <span className="absolute top-0 left-0 -translate-x-[2px] text-red-500 opacity-0 group-hover:opacity-70 group-hover:animate-glitch-2 mix-blend-screen z-0">Viking</span>
-                <span className="absolute top-0 left-0 translate-x-[2px] text-blue-500 opacity-0 group-hover:opacity-70 group-hover:animate-glitch-3 mix-blend-screen z-0">Viking</span>
-              </span>
-              <br/>
-              <span className="relative inline-block pb-2">
-                <span className="text-emerald-400 relative z-10 block group-hover:animate-glitch-2">Algeria</span>
-                <span className="absolute top-0 left-0 -translate-x-[2px] text-red-500 opacity-0 group-hover:opacity-70 group-hover:animate-glitch-3 mix-blend-screen z-0">Algeria</span>
-                <span className="absolute top-0 left-0 translate-x-[2px] text-blue-500 opacity-0 group-hover:opacity-70 group-hover:animate-glitch-1 mix-blend-screen z-0">Algeria</span>
-              </span>
-            </motion.h1>
-            <p className="text-white/40 max-w-sm text-[10px] md:text-xs uppercase tracking-[0.3em] font-mono leading-relaxed text-center md:text-left">
-              Personal notes and resources for the Viking Algeria YouTube channel.
-            </p>
-          </div>
+    <div className="min-h-screen flex flex-col relative z-10 text-[var(--text-primary)]">
+      {/* Strict 3-Zone Top Bar */}
+      <TopBar
+        onBrandClick={() => {
+          handleClearSearch();
+          setCurrentPage(1);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        navLinks={[
+          {
+            label: 'Featured',
+            href: '#featured-spotlight',
+            onClick: () =>
+              document
+                .getElementById('featured-spotlight')
+                ?.scrollIntoView({ behavior: 'smooth' }),
+          },
+          {
+            label: 'Archive',
+            href: '#crate-archive',
+            onClick: () => archiveSectionRef.current?.scrollIntoView({ behavior: 'smooth' }),
+          },
+          ...(posts.length > 0
+            ? [
+                {
+                  label: 'Random',
+                  onClick: openRandomEpisode,
+                },
+              ]
+            : []),
+          {
+            label: 'Outro Deck',
+            onClick: () => window.dispatchEvent(new CustomEvent('toggle-music-player')),
+          },
+        ]}
+        primaryAction={{
+          label: 'Search',
+          onClick: focusSearch,
+          ariaLabel: 'Focus archive search',
+        }}
+      />
 
-          <div className="relative w-full md:w-auto flex justify-center md:justify-end gap-4 items-center mt-6 md:mt-0">
-            <button
-              onClick={() => window.dispatchEvent(new CustomEvent('toggle-music-player'))}
-              className="w-12 h-12 bg-black border border-white/20 flex items-center justify-center hover:border-emerald-500 hover:shadow-[4px_4px_0_#10b981] transition-all group shrink-0"
-              aria-label="Toggle music player"
-            >
-              <Music className="w-5 h-5 text-white/40 group-hover:text-emerald-500 transition-colors" />
-            </button>
-            <div className={cn(
-              "flex items-center gap-4 transition-all duration-500",
-              isSearchOpen ? "w-[calc(100%-4rem)] md:w-96" : "w-12"
-            )}>
-              {isSearchOpen ? (
-                <div className="relative w-full group">
-                  <input
-                    autoFocus
-                    type="text"
-                    placeholder="Search posts (Press Esc to close)..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') {
-                        setIsSearchOpen(false);
-                        setSearchQuery('');
-                      }
-                    }}
-                    className="w-full bg-black border border-white/20 py-3 px-6 pl-12 focus:outline-none focus:border-emerald-500 transition-all font-mono text-[10px] md:text-sm uppercase tracking-widest shadow-[4px_4px_0_#10b98100] focus:shadow-[4px_4px_0_#10b981]"
-                  />
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 group-focus-within:text-emerald-500 transition-colors" />
-                  <button 
-                    onClick={() => {
-                      setIsSearchOpen(false);
-                      setSearchQuery('');
-                    }}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 hover:text-emerald-400 transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <button 
-                  onClick={() => setIsSearchOpen(true)}
-                  className="w-12 h-12 bg-black border border-white/20 flex items-center justify-center hover:border-emerald-500 hover:shadow-[4px_4px_0_#10b981] transition-all group shrink-0"
-                >
-                  <Search className="w-5 h-5 text-white/40 group-hover:text-emerald-500 transition-colors" />
-                </button>
-              )}
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 md:px-8 pt-10 md:pt-14 pb-20">
+        {/* Asymmetric Swiss Poster Hero Split */}
+        <section
+          id="featured-spotlight"
+          className="scroll-mt-20 grid grid-cols-1 lg:grid-cols-12 border border-[var(--border-strong)] bg-[var(--bg-elevated)] items-stretch"
+        >
+          {/* Left Column: Oversized Display Title & Actions */}
+          <div className="lg:col-span-7 p-6 md:p-10 lg:p-12 flex flex-col justify-between gap-8 border-b lg:border-b-0 lg:border-r border-[var(--border-hairline)]">
+            <div>
+              <p className="font-mono text-xs uppercase tracking-widest text-[var(--accent)] mb-4">
+                Soundtrack &amp; Tracklist Index · YouTube &amp; Odysee
+              </p>
+              <h1
+                className="font-display text-5xl sm:text-6xl lg:text-7xl font-black tracking-[-0.03em] leading-[0.94] text-[var(--text-primary)] mb-6"
+                style={{ textWrap: 'balance' }}
+              >
+                Viking Algeria
+              </h1>
+              <p className="text-base md:text-lg text-[var(--text-muted)] max-w-xl leading-relaxed">
+                Curated soundtrack notes, verified anime and gaming sources, and instant-copy
+                timestamps for every channel episode.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4 pt-2">
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent('toggle-music-player'))}
+                className="px-5 py-3 bg-[var(--accent)] text-[var(--accent-contrast)] font-semibold text-xs uppercase tracking-wider hover:opacity-90 transition-opacity inline-flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0"
+              >
+                <Music className="w-4 h-4" />
+                <span>{isPlayerOpen ? 'Hide Outro Deck' : 'Listen to Outro Deck'}</span>
+              </button>
+              <a
+                href="#crate-archive"
+                onClick={(e) => {
+                  e.preventDefault();
+                  archiveSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="px-5 py-3 border border-[var(--border-strong)] text-[var(--text-primary)] hover:border-[var(--accent)] hover:text-[var(--accent)] font-semibold text-xs uppercase tracking-wider transition-colors whitespace-nowrap shrink-0"
+              >
+                Browse {posts.length} Episodes
+              </a>
             </div>
           </div>
-        </header>
 
-        {debouncedSearchQuery && (
-          <div className="mb-12 text-center md:text-left">
-            <h2 className="text-sm font-mono uppercase tracking-[0.4em] text-white/40 mb-4">
-              Showing results for: <span className="text-emerald-500">{debouncedSearchQuery}</span>
-            </h2>
-            {filteredPosts.length === 0 && (
-              <div className="py-20 flex justify-center">
-                <div className="border border-red-500/30 bg-red-500/5 p-6 max-w-lg w-full relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-0.5 bg-red-500/50" />
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                    <span className="font-mono text-xs text-red-500 font-bold uppercase tracking-widest">ERR_NOT_FOUND</span>
-                  </div>
-                  <p className="text-white/60 font-mono text-sm leading-relaxed mb-4">
-                    $ grep -r "{debouncedSearchQuery}" /content/posts/* <br/>
-                    <span className="text-red-400">grep: No match found.</span>
-                  </p>
-                  <button 
-                    onClick={() => {
-                      setSearchQuery('');
-                      setIsSearchOpen(false);
+          {/* Right Column: Featured Spotlight Episode */}
+          <div className="lg:col-span-5 flex flex-col justify-between bg-[var(--bg-surface)]">
+            {featuredPost ? (
+              <Link
+                to={`/post/${featuredPost.id}`}
+                className="group flex flex-col h-full justify-between outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+              >
+                <div className="relative aspect-video lg:aspect-auto lg:flex-1 min-h-[220px] overflow-hidden border-b border-[var(--border-hairline)] bg-black">
+                  <img
+                    src={featuredThumb}
+                    alt={`${featuredPost.title} featured episode cover`}
+                    referrerPolicy="no-referrer"
+                    onError={() => {
+                      if (featuredFallbackTier === 0 && rawFeaturedThumb?.includes('maxresdefault.jpg')) {
+                        setFeaturedFallbackTier(1);
+                      } else {
+                        setFeaturedFallbackTier(2);
+                      }
                     }}
-                    className="text-xs font-mono text-white/40 hover:text-white transition-colors underline underline-offset-4"
-                  >
-                    Clear Search Buffer
-                  </button>
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
+                  <div className="absolute top-4 left-4 right-4 flex items-center justify-between text-white">
+                    <span className="font-mono text-[11px] uppercase tracking-widest bg-black/75 px-2.5 py-1 border border-white/20">
+                      Latest Release
+                    </span>
+                    <span className="font-mono text-xs font-bold tabular-nums bg-black/75 px-2.5 py-1 border border-white/20">
+                      {featuredPost.id}
+                    </span>
+                  </div>
                 </div>
+                <div className="p-6 flex items-end justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2 className="font-display text-xl md:text-2xl font-extrabold tracking-tight text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors truncate">
+                      {featuredPost.title}
+                    </h2>
+                    <p className="text-xs text-[var(--text-muted)] mt-1 truncate">
+                      {featuredPost.tags && featuredPost.tags.length > 0
+                        ? featuredPost.tags.slice(0, 3).join(' · ')
+                        : 'Soundtrack Tracklist & Timestamps'}
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center justify-center w-10 h-10 shrink-0 border border-[var(--border-strong)] text-[var(--text-primary)] group-hover:bg-[var(--accent)] group-hover:border-[var(--accent)] group-hover:text-[var(--accent-contrast)] transition-colors">
+                    <ArrowUpRight className="w-4 h-4" />
+                  </span>
+                </div>
+              </Link>
+            ) : (
+              <div className="p-8 flex items-center justify-center h-full text-sm text-[var(--text-muted)]">
+                No featured episodes available.
               </div>
             )}
           </div>
-        )}
+        </section>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
-          {paginatedPosts.map((post, index) => (
-            <PostCard key={post.id} post={post} index={index} />
-          ))}
-        </div>
+        {/* Full-Width 3-Column Metrics Strip */}
+        <section
+          aria-label="Archive summary"
+          className="grid grid-cols-1 sm:grid-cols-3 border-x border-b border-[var(--border-strong)] bg-[var(--bg-canvas)] mb-12"
+        >
+          <div className="p-5 md:p-6 border-b sm:border-b-0 sm:border-r border-[var(--border-hairline)] flex items-baseline justify-between">
+            <span className="text-xs font-mono uppercase tracking-wider text-[var(--text-muted)]">
+              Indexed Episodes
+            </span>
+            <span className="font-display text-2xl md:text-3xl font-black tabular-nums text-[var(--text-primary)]">
+              {posts.length}
+            </span>
+          </div>
+          <div className="p-5 md:p-6 border-b sm:border-b-0 sm:border-r border-[var(--border-hairline)] flex items-baseline justify-between">
+            <span className="text-xs font-mono uppercase tracking-wider text-[var(--text-muted)]">
+              Anime &amp; Game Credits
+            </span>
+            <span className="font-display text-2xl md:text-3xl font-black tabular-nums text-[var(--text-primary)]">
+              {totalCreditsCount}+
+            </span>
+          </div>
+          <div className="p-5 md:p-6 flex items-baseline justify-between">
+            <span className="text-xs font-mono uppercase tracking-wider text-[var(--text-muted)]">
+              Track Timestamps
+            </span>
+            <span className="font-display text-2xl md:text-3xl font-black tabular-nums text-[var(--accent)]">
+              {totalTrackCount.toLocaleString()}
+            </span>
+          </div>
+        </section>
 
-        {totalPages > 1 && (
-          <div className="mt-24 flex justify-center w-full px-4 max-w-7xl mx-auto">
-            <div className="inline-flex flex-wrap items-center justify-center gap-1 md:gap-2 bg-black/80 backdrop-blur-xl border border-white/10 p-1.5 md:p-2 shadow-[4px_4px_0_rgba(255,255,255,0.05)] md:shadow-[8px_8px_0_rgba(16,185,129,0.15)]">
-              
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="w-12 h-12 flex items-center justify-center text-white/50 hover:text-emerald-400 hover:bg-white/5 disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-white/50 cursor-pointer disabled:cursor-not-allowed transition-all group"
-                aria-label="Previous page"
+        {/* Archive Toolbar & Crate Section */}
+        <section id="crate-archive" ref={archiveSectionRef} className="scroll-mt-24">
+          {/* Controls Strip */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-[var(--border-hairline)]">
+            {/* Search Input */}
+            <div className="relative flex-1 max-w-xl">
+              <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    handleClearSearch();
+                    searchInputRef.current?.blur();
+                  }
+                }}
+                placeholder="Search episodes, anime, games, or songs (Press /)"
+                aria-label="Search episodes, anime, games, or songs"
+                className="w-full h-11 pl-10 pr-10 bg-[var(--bg-elevated)] border border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-colors"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  aria-label="Clear search"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Utility Controls: View Switcher, Theme Toggle, Audio Deck */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* View Switcher */}
+              <div
+                className="inline-flex border border-[var(--border-strong)] bg-[var(--bg-elevated)] p-0.5"
+                role="group"
+                aria-label="Archive view mode"
               >
-                <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                <button
+                  type="button"
+                  onClick={() => setViewMode('crate')}
+                  className={cn(
+                    'h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap shrink-0',
+                    viewMode === 'crate'
+                      ? 'bg-[var(--text-primary)] text-[var(--bg-canvas)]'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  )}
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span>Crate List</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  className={cn(
+                    'h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap shrink-0',
+                    viewMode === 'grid'
+                      ? 'bg-[var(--text-primary)] text-[var(--bg-canvas)]'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  )}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Poster Grid</span>
+                </button>
+              </div>
+
+              {/* Light / Dark Mode Toggle */}
+              <button
+                type="button"
+                onClick={toggleTheme}
+                aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+                className="h-10 px-3.5 border border-[var(--border-strong)] bg-[var(--bg-elevated)] hover:border-[var(--accent)] text-[var(--text-primary)] inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap shrink-0"
+              >
+                {theme === 'dark' ? (
+                  <>
+                    <Sun className="w-3.5 h-3.5 text-[var(--accent)]" />
+                    <span>Light</span>
+                  </>
+                ) : (
+                  <>
+                    <Moon className="w-3.5 h-3.5 text-[var(--accent)]" />
+                    <span>Dark</span>
+                  </>
+                )}
               </button>
-              
-              <div className="hidden md:flex flex-wrap items-center justify-center gap-1">
-                {(() => {
-                  const pages = [];
-                  const delta = 2;
-                  const left = Math.max(2, currentPage - delta);
-                  const right = Math.min(totalPages - 1, currentPage + delta);
-                  
-                  // Avoid single-page ellipsis by expanding boundaries if adjacent
-                  const startPage = left === 3 ? 2 : left;
-                  const endPage = right === totalPages - 2 ? totalPages - 1 : right;
 
-                  pages.push(
-                    <button
-                      key={1}
-                      onClick={() => setCurrentPage(1)}
-                      className={cn(
-                        "w-12 h-12 flex items-center justify-center transition-all font-mono text-sm font-bold border border-transparent",
-                        currentPage === 1 
-                          ? "bg-emerald-500 text-black shadow-[2px_2px_0_#fff]" 
-                          : "text-white/50 hover:text-emerald-400 hover:bg-white/5 hover:border-white/10"
-                      )}
-                    >
-                      01
-                    </button>
-                  );
-
-                  if (startPage > 2) {
-                    pages.push(
-                      <span key="ellipsis-left" className="w-8 text-center text-white/20 font-mono text-xs tracking-widest shrink-0">..</span>
-                    );
-                  }
-
-                  for (let i = startPage; i <= endPage; i++) {
-                    pages.push(
-                      <button
-                        key={i}
-                        onClick={() => setCurrentPage(i)}
-                        className={cn(
-                          "w-12 h-12 flex items-center justify-center transition-all font-mono text-sm font-bold border border-transparent",
-                          currentPage === i 
-                            ? "bg-emerald-500 text-black shadow-[2px_2px_0_#fff]" 
-                            : "text-white/50 hover:text-emerald-400 hover:bg-white/5 hover:border-white/10"
-                        )}
-                      >
-                        {i.toString().padStart(2, '0')}
-                      </button>
-                    );
-                  }
-
-                  if (endPage < totalPages - 1) {
-                    pages.push(
-                      <span key="ellipsis-right" className="w-8 text-center text-white/20 font-mono text-xs tracking-widest shrink-0">..</span>
-                    );
-                  }
-
-                  if (totalPages > 1) {
-                    pages.push(
-                      <button
-                        key={totalPages}
-                        onClick={() => setCurrentPage(totalPages)}
-                        className={cn(
-                          "w-12 h-12 flex items-center justify-center transition-all font-mono text-sm font-bold border border-transparent",
-                          currentPage === totalPages 
-                            ? "bg-emerald-500 text-black shadow-[2px_2px_0_#fff]" 
-                            : "text-white/50 hover:text-emerald-400 hover:bg-white/5 hover:border-white/10"
-                        )}
-                      >
-                        {totalPages.toString().padStart(2, '0')}
-                      </button>
-                    );
-                  }
-
-                  return pages;
-                })()}
-              </div>
-
-              <div className="md:hidden flex items-center justify-center min-w-[120px] font-mono text-[10px] uppercase tracking-widest text-white/40">
-                <span className="text-emerald-400 font-bold text-sm mx-3 border-b border-emerald-400/30 pb-0.5">{currentPage.toString().padStart(2, '0')}</span> 
-                <span className="opacity-50">/</span> 
-                <span className="text-white/80 font-bold text-sm mx-3">{totalPages.toString().padStart(2, '0')}</span>
-              </div>
-
+              {/* Audio Deck Trigger */}
               <button
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-                className="w-12 h-12 flex items-center justify-center text-white/50 hover:text-emerald-400 hover:bg-white/5 disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-white/50 cursor-pointer disabled:cursor-not-allowed transition-all group"
-                aria-label="Next page"
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('toggle-music-player'))}
+                className={cn(
+                  'h-10 px-3.5 border inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap shrink-0',
+                  isPlayerOpen
+                    ? 'bg-[var(--accent)] border-[var(--accent)] text-[var(--accent-contrast)]'
+                    : 'bg-[var(--bg-elevated)] border-[var(--border-strong)] text-[var(--text-primary)] hover:border-[var(--accent)]'
+                )}
               >
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <Music className="w-3.5 h-3.5" />
+                <span>Audio Deck</span>
               </button>
             </div>
           </div>
-        )}
-        </div>
-      </div>
 
-      <footer className="border-t border-white/10 p-12 text-center flex flex-col items-center gap-6 mt-auto">
-        <p className="text-white/20 text-[10px] uppercase tracking-[0.4em] font-mono">
-          VikingAlgeria &copy; {new Date().getFullYear()}
-        </p>
+          {/* Featured Series Filter Tabs */}
+          {popularTags.length > 0 && (
+            <div
+              id="featured-tags"
+              className="py-4 flex flex-wrap items-center gap-2 border-b border-[var(--border-hairline)] scroll-mt-24"
+            >
+              <span className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mr-1">
+                Featured Series:
+              </span>
+              <button
+                type="button"
+                onClick={handleClearSearch}
+                className={cn(
+                  'px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0 border',
+                  !searchQuery.trim()
+                    ? 'bg-[var(--text-primary)] text-[var(--bg-canvas)] border-[var(--text-primary)]'
+                    : 'bg-transparent text-[var(--text-muted)] border-[var(--border-hairline)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]'
+                )}
+              >
+                All
+              </button>
+              {popularTags.map((tag) => {
+                const isActive = searchQuery.toLowerCase() === tag.toLowerCase();
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => handleTagSelect(tag)}
+                    className={cn(
+                      'px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0 border',
+                      isActive
+                        ? 'bg-[var(--accent)] text-[var(--accent-contrast)] border-[var(--accent)] font-semibold'
+                        : 'bg-transparent text-[var(--text-muted)] border-[var(--border-hairline)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]'
+                    )}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Active Search Banner */}
+          {debouncedSearchQuery.trim() && (
+            <div className="mt-6 p-4 border border-[var(--border-strong)] bg-[var(--bg-surface)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="text-sm">
+                <span className="text-[var(--text-muted)] mr-2">Showing results for</span>
+                <span className="font-semibold text-[var(--text-primary)]">
+                  "{debouncedSearchQuery}"
+                </span>
+                <span className="font-mono text-xs tabular-nums text-[var(--accent)] ml-3">
+                  {filteredPosts.length} {filteredPosts.length === 1 ? 'episode' : 'episodes'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleClearSearch}
+                className="px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider border border-[var(--border-strong)] text-[var(--text-primary)] hover:bg-[var(--accent)] hover:border-[var(--accent)] hover:text-[var(--accent-contrast)] transition-colors self-start sm:self-auto cursor-pointer"
+              >
+                Reset Filter
+              </button>
+            </div>
+          )}
+
+          {/* Error State */}
+          {loadError && (
+            <div className="my-12 p-8 border border-[var(--accent)] bg-[var(--bg-surface)] text-center max-w-lg mx-auto">
+              <p className="font-display font-bold text-lg text-[var(--text-primary)] mb-2">
+                Catalog Unavailable
+              </p>
+              <p className="text-sm text-[var(--text-muted)] mb-5">{loadError}</p>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="px-5 py-2.5 bg-[var(--accent)] text-[var(--accent-contrast)] text-xs font-semibold uppercase tracking-wider cursor-pointer"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {/* Empty Search State */}
+          {!loadError && debouncedSearchQuery.trim() && filteredPosts.length === 0 && (
+            <div className="my-14 p-8 border border-[var(--border-strong)] bg-[var(--bg-surface)] max-w-lg mx-auto text-center">
+              <p className="font-mono text-xs uppercase tracking-widest text-[var(--accent)] mb-2">
+                No Matching Episodes
+              </p>
+              <h3 className="font-display text-xl font-bold text-[var(--text-primary)] mb-2">
+                Nothing matched "{debouncedSearchQuery}"
+              </h3>
+              <p className="text-sm text-[var(--text-muted)] mb-6">
+                Try searching by anime title, game name, or episode number.
+              </p>
+              <button
+                type="button"
+                onClick={handleClearSearch}
+                className="px-5 py-2.5 bg-[var(--text-primary)] text-[var(--bg-canvas)] hover:bg-[var(--accent)] hover:text-[var(--accent-contrast)] text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                Show All Episodes
+              </button>
+            </div>
+          )}
+
+          {/* Archive Listing */}
+          {!loadError && paginatedPosts.length > 0 && (
+            <div className="mt-6">
+              {viewMode === 'crate' ? (
+                <CrateList
+                  posts={paginatedPosts}
+                  onTagSelect={handleTagSelect}
+                  activeQuery={searchQuery}
+                />
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+                  {paginatedPosts.map((post) => (
+                    <PostCard key={post.id} post={post} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <nav
+              aria-label="Archive pagination"
+              className="mt-14 flex items-center justify-center"
+            >
+              <div className="inline-flex items-center border border-[var(--border-strong)] bg-[var(--bg-elevated)]">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="w-11 h-11 flex items-center justify-center border-r border-[var(--border-hairline)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] disabled:opacity-30 disabled:pointer-events-none cursor-pointer transition-colors"
+                  aria-label="Previous page"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+
+                <div className="hidden md:flex items-center divide-x divide-[var(--border-hairline)]">
+                  {(() => {
+                    const pages: React.ReactNode[] = [];
+                    const delta = 2;
+                    const left = Math.max(2, currentPage - delta);
+                    const right = Math.min(totalPages - 1, currentPage + delta);
+                    const startPage = left === 3 ? 2 : left;
+                    const endPage = right === totalPages - 2 ? totalPages - 1 : right;
+
+                    const renderPageBtn = (pageNum: number) => (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        onClick={() => setCurrentPage(pageNum)}
+                        aria-current={currentPage === pageNum ? 'page' : undefined}
+                        className={cn(
+                          'w-11 h-11 flex items-center justify-center font-mono text-xs font-bold tabular-nums transition-colors cursor-pointer',
+                          currentPage === pageNum
+                            ? 'bg-[var(--accent)] text-[var(--accent-contrast)]'
+                            : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]'
+                        )}
+                      >
+                        {pageNum.toString().padStart(2, '0')}
+                      </button>
+                    );
+
+                    pages.push(renderPageBtn(1));
+
+                    if (startPage > 2) {
+                      pages.push(
+                        <span
+                          key="ellipsis-left"
+                          className="w-10 h-11 flex items-center justify-center text-[var(--text-muted)] font-mono text-xs"
+                        >
+                          ...
+                        </span>
+                      );
+                    }
+
+                    for (let i = startPage; i <= endPage; i++) {
+                      pages.push(renderPageBtn(i));
+                    }
+
+                    if (endPage < totalPages - 1) {
+                      pages.push(
+                        <span
+                          key="ellipsis-right"
+                          className="w-10 h-11 flex items-center justify-center text-[var(--text-muted)] font-mono text-xs"
+                        >
+                          ...
+                        </span>
+                      );
+                    }
+
+                    if (totalPages > 1) {
+                      pages.push(renderPageBtn(totalPages));
+                    }
+
+                    return pages;
+                  })()}
+                </div>
+
+                <div className="md:hidden px-4 h-11 flex items-center font-mono text-xs tabular-nums text-[var(--text-muted)]">
+                  <span className="font-bold text-[var(--text-primary)]">
+                    {currentPage.toString().padStart(2, '0')}
+                  </span>
+                  <span className="mx-1.5">/</span>
+                  <span>{totalPages.toString().padStart(2, '0')}</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="w-11 h-11 flex items-center justify-center border-l border-[var(--border-hairline)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] disabled:opacity-30 disabled:pointer-events-none cursor-pointer transition-colors"
+                  aria-label="Next page"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </nav>
+          )}
+        </section>
+      </main>
+
+      <footer className="border-t border-[var(--border-hairline)] py-10 px-4 md:px-8 mt-auto">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[var(--text-muted)]">
+          <p className="font-mono uppercase tracking-wider">
+            Viking Algeria &copy; {new Date().getFullYear()}
+          </p>
+          <div className="flex items-center gap-6">
+            <a href="/sitemap.xml" className="hover:text-[var(--text-primary)] transition-colors">
+              Sitemap
+            </a>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+            >
+              {theme === 'dark' ? 'Switch to Light Paper' : 'Switch to Dark Studio'}
+            </button>
+          </div>
+        </div>
       </footer>
     </div>
   );

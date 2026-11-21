@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 import { copyToClipboard } from '../utils';
 
 export const CopyLinkButton = ({ url }: { url: string }) => {
@@ -16,26 +15,22 @@ export const CopyLinkButton = ({ url }: { url: string }) => {
   };
 
   return (
-    <div className="relative flex flex-col items-center">
-      <button
-        onClick={handleCopy}
-        className="p-3 bg-black border border-white/20 hover:border-emerald-500 hover:shadow-[4px_4px_0_#10b981] transition-all flex items-center justify-center group"
-        aria-label={copied ? "Link copied to clipboard" : "Copy link to clipboard"}
-      >
-        {copied ? <Check className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5 text-white group-hover:text-emerald-400 transition-colors" />}
-      </button>
-      <AnimatePresence>
-        {copied && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 10 }}
-            exit={{ opacity: 0, y: 5 }}
-            className="absolute top-full text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400 whitespace-nowrap drop-shadow-md z-50 pointer-events-none mt-1"
-          >
-            Copied!
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+    <button
+      onClick={handleCopy}
+      className="px-4 py-2 bg-[var(--bg-elevated)] border border-[var(--border-strong)] hover:border-[var(--accent)] hover:bg-[var(--accent)] hover:text-[var(--accent-contrast)] text-[var(--text-primary)] transition-colors flex items-center gap-2 text-xs font-semibold uppercase tracking-wider whitespace-nowrap shrink-0 cursor-pointer"
+      aria-label={copied ? 'Link copied to clipboard' : 'Copy link to clipboard'}
+    >
+      {copied ? (
+        <>
+          <Check className="w-3.5 h-3.5" />
+          <span>Copied</span>
+        </>
+      ) : (
+        <>
+          <Copy className="w-3.5 h-3.5" />
+          <span>Copy Link</span>
+        </>
+      )}
+    </button>
   );
 };

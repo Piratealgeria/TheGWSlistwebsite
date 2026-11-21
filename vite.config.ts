@@ -63,7 +63,7 @@ const postsPlugin = () => {
 
         // Final fallback if still nothing
         if (!thumbnail) {
-          thumbnail = `https://picsum.photos/seed/${metadata.id}/800/450`;
+          thumbnail = '/og-cover.jpg';
         }
 
         metadata.thumbnail = thumbnail;
@@ -117,8 +117,30 @@ export default defineConfig(({mode}) => {
         }
       }
     ],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return;
+            if (id.includes('react-player')) return 'vendor-player';
+            if (
+              id.includes('react-markdown') ||
+              id.includes('remark-') ||
+              id.includes('unified') ||
+              id.includes('mdast') ||
+              id.includes('hast') ||
+              id.includes('micromark')
+            ) {
+              return 'vendor-markdown';
+            }
+            if (id.includes('/motion/') || id.includes('framer-motion')) return 'vendor-motion';
+            if (id.includes('lucide-react')) return 'vendor-icons';
+            if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('react-router')) {
+              return 'vendor-react';
+            }
+          },
+        },
+      },
     },
     resolve: {
       alias: {

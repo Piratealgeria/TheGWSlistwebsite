@@ -1,30 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { motion, useMotionTemplate, useMotionValue } from 'motion/react';
 
 export const BackgroundGrid = () => {
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
+  const mouseX = useMotionValue(-500);
+  const mouseY = useMotionValue(-500);
 
   useEffect(() => {
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) return;
+
     const handleMouseMove = (e: MouseEvent) => {
       mouseX.set(e.clientX);
       mouseY.set(e.clientY);
     };
 
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    return () => window.removeEventListener('mousemove', handleMouseMove);
   }, [mouseX, mouseY]);
 
   return (
     <>
-      <div className="fixed -inset-[4rem] bg-grid-pattern pointer-events-none z-0 opacity-20 mix-blend-screen" />
+      <div className="fixed inset-0 bg-swiss-grid pointer-events-none z-0 opacity-70" />
       <motion.div
-        className="fixed inset-0 pointer-events-none z-0"
+        className="fixed inset-0 pointer-events-none z-0 hidden md:block"
         style={{
-          background: useMotionTemplate`radial-gradient(600px circle at ${mouseX}px ${mouseY}px, rgba(16, 185, 129, 0.08), transparent 80%)`,
+          background: useMotionTemplate`radial-gradient(520px circle at ${mouseX}px ${mouseY}px, color-mix(in srgb, var(--accent) 6%, transparent), transparent 75%)`,
         }}
       />
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-emerald-500/10 blur-[120px] rounded-full pointer-events-none z-0" />
     </>
   );
 };

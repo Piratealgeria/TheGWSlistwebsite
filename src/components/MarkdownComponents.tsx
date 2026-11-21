@@ -5,7 +5,7 @@ import { copyToClipboard } from '../utils';
 
 export const CodeBlock = ({ children, className }: any) => {
   const [copied, setCopied] = useState(false);
-  
+
   const getText = (node: any): string => {
     if (typeof node === 'string') return node;
     if (typeof node === 'number') return String(node);
@@ -13,7 +13,7 @@ export const CodeBlock = ({ children, className }: any) => {
     if (node?.props?.children) return getText(node.props.children);
     return '';
   };
-  
+
   const textContent = getText(children).trim();
 
   const handleCopy = async () => {
@@ -25,25 +25,29 @@ export const CodeBlock = ({ children, className }: any) => {
   };
 
   return (
-    <div className="relative group my-8">
-      <div className="absolute top-0 left-0 w-full h-10 bg-[#111] flex items-center justify-between px-4 border border-b-0 border-white/20 rounded-t-sm">
-        <div className="flex gap-2">
-          <div className="w-3 h-3 rounded-full bg-red-500/80" />
-          <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
-          <div className="w-3 h-3 rounded-full bg-green-500/80" />
-        </div>
+    <div className="relative group my-8 border border-[var(--border-strong)] bg-[var(--bg-surface)]">
+      <div className="h-10 flex items-center justify-between px-4 border-b border-[var(--border-hairline)] bg-[var(--bg-elevated)]">
+        <span className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)]">
+          Notes Snippet
+        </span>
         <button
           onClick={handleCopy}
-          className="text-white/40 hover:text-white transition-colors flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest"
+          className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider cursor-pointer"
         >
           {copied ? (
-            <><Check className="w-3 h-3 text-emerald-400" /> <span className="text-emerald-400">Copied</span></>
+            <>
+              <Check className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span className="text-[var(--accent)] font-semibold">Copied</span>
+            </>
           ) : (
-            <><Copy className="w-3 h-3" /> <span>Copy</span></>
+            <>
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copy</span>
+            </>
           )}
         </button>
       </div>
-      <pre className="pt-14 pb-6 px-6 bg-black/50 border border-white/20 overflow-x-auto text-sm font-mono text-emerald-400 shadow-[4px_4px_0_rgba(16,185,129,0.15)] rounded-b-sm">
+      <pre className="p-5 overflow-x-auto text-sm font-mono text-[var(--text-primary)] leading-relaxed">
         <code className={className}>{children}</code>
       </pre>
     </div>
@@ -60,19 +64,16 @@ export const FormattedLine = ({ children }: { children: React.ReactNode }) => {
   };
 
   const fullText = getText(children);
-  // Matches timestamps like 0:09, 12:34, 1:23:45 at the start of the string
   const timestampRegex = /^(\d{1,2}:\d{2}(?::\d{2})?)\s*(.*)/;
   const match = fullText.match(timestampRegex);
 
-  // Matches "-Anime:", "Game : ", etc. but not "http:" or "https:"
   const categoryRegex = /^(-?\s*(?!http|https)[a-zA-Z0-9_]+)\s*:\s*(.*)/i;
   const categoryMatch = fullText.match(categoryRegex);
 
   if (match) {
     const timestamp = match[1];
     const rest = match[2].trim();
-    
-    // Try to remove the timestamp from the actual children to avoid duplication
+
     const restNodes = React.Children.map(children, (child, index) => {
       if (index === 0 && typeof child === 'string') {
         const tsMatch = child.match(/^(\d{1,2}:\d{2}(?::\d{2})?)\s*(.*)/);
@@ -82,8 +83,10 @@ export const FormattedLine = ({ children }: { children: React.ReactNode }) => {
     });
 
     return (
-      <span className="flex items-start gap-3 w-full break-words">
-        <span className="text-emerald-400 font-mono shrink-0 font-bold">{timestamp}</span>
+      <span className="flex items-baseline gap-4 w-full break-words">
+        <span className="text-[var(--accent)] font-mono tabular-nums shrink-0 font-bold text-sm">
+          {timestamp}
+        </span>
         {rest ? (
           <ClickToCopy text={rest} className="flex-1">
             {restNodes}
@@ -111,9 +114,8 @@ export const FormattedLine = ({ children }: { children: React.ReactNode }) => {
 
 export const CopyableListItem = ({ children }: { children: React.ReactNode }) => {
   return (
-    <li className="relative py-3 px-5 transition-all list-none border-l-4 border-white/10 hover:border-emerald-500 bg-white/[0.02] hover:bg-white/[0.05] flex items-start gap-4 my-3 font-mono text-sm shadow-[4px_4px_0_transparent] hover:shadow-[4px_4px_0_#10b981]">
-      <span className="mt-0.5 text-[10px] text-emerald-500 shrink-0">►</span>
-      <div className="flex-1 min-w-0 break-words text-white/80">
+    <li className="relative py-3.5 px-4 transition-colors duration-150 list-none border-b border-[var(--border-hairline)] hover:bg-[var(--bg-surface)] flex items-baseline gap-4 text-sm md:text-base">
+      <div className="flex-1 min-w-0 break-words text-[var(--text-primary)]">
         <FormattedLine>{children}</FormattedLine>
       </div>
     </li>
@@ -123,7 +125,6 @@ export const CopyableListItem = ({ children }: { children: React.ReactNode }) =>
 export const VideoEmbed = ({ url }: { url: string }) => {
   if (!url || typeof url !== 'string') return null;
 
-  // Clean URL to prevent protocol tampering
   const cleanUrl = url.trim();
   if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
     return null;
@@ -134,11 +135,12 @@ export const VideoEmbed = ({ url }: { url: string }) => {
 
   let embedUrl = '';
   if (isYoutube) {
-    const ytMatch = cleanUrl.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/)|youtu\.be\/)([\w-]{11})(?![ \w-])/);
+    const ytMatch = cleanUrl.match(
+      /(?:youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/)|youtu\.be\/)([\w-]{11})(?![ \w-])/
+    );
     if (ytMatch && ytMatch[1]) {
       embedUrl = `https://www.youtube.com/embed/${ytMatch[1]}`;
 
-      // Check for timestamp query parameter (e.g., ?t=120, &t=2m30s, ?start=60)
       const timeMatch = cleanUrl.match(/[?&](?:t|start)=([0-9hms]+)/i);
       if (timeMatch) {
         const rawTime = timeMatch[1];
@@ -167,11 +169,11 @@ export const VideoEmbed = ({ url }: { url: string }) => {
 
   if (!embedUrl) {
     return (
-      <a 
-        href={cleanUrl} 
-        target="_blank" 
-        rel="noopener noreferrer" 
-        className="text-emerald-400 hover:text-black hover:bg-emerald-400 py-0.5 px-1 font-bold no-underline transition-colors break-all"
+      <a
+        href={cleanUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[var(--accent)] hover:underline underline-offset-4 font-semibold break-all"
       >
         {cleanUrl}
       </a>
@@ -179,7 +181,7 @@ export const VideoEmbed = ({ url }: { url: string }) => {
   }
 
   return (
-    <div className="relative aspect-video w-full bg-black border border-white/20 overflow-hidden my-12 shadow-[8px_8px_0_#10b981] group">
+    <div className="relative aspect-video w-full bg-black border border-[var(--border-strong)] overflow-hidden my-10 shadow-[6px_6px_0px_var(--shadow-brutal)]">
       <iframe
         src={embedUrl}
         className="absolute inset-0 w-full h-full"

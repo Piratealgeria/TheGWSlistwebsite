@@ -47,7 +47,8 @@ export function sanitizeHtml(rawHtml: string): string {
       const dangerousTags = [
         'script', 'iframe', 'object', 'embed', 'base', 'meta',
         'form', 'input', 'textarea', 'button', 'select', 'frame',
-        'frameset', 'applet', 'link', 'style'
+        'frameset', 'applet', 'link', 'style', 'svg', 'math',
+        'template', 'noscript'
       ];
 
       dangerousTags.forEach(tag => {
@@ -61,15 +62,16 @@ export function sanitizeHtml(rawHtml: string): string {
         const attrs = Array.from(el.attributes);
         for (const attr of attrs) {
           const name = attr.name.toLowerCase();
-          const val = attr.value.trim().toLowerCase();
+          // Normalize value by stripping null bytes and ASCII control characters
+          const val = attr.value.replace(/[\x00-\x1F\x7F-\x9F\s]+/g, '').toLowerCase();
 
           // Remove inline event handlers (onclick, onload, onerror, etc.)
-          if (name.startsWith('on')) {
+          if (name.startsWith('on') || name.startsWith('data-on') || name === 'srcdoc' || name === 'formaction') {
             el.removeAttribute(attr.name);
           }
-          // Remove dangerous protocol schemes
+          // Remove dangerous protocol schemes (including encoded variants)
           if (
-            (name === 'href' || name === 'src' || name === 'action') &&
+            (name === 'href' || name === 'src' || name === 'action' || name.endsWith('href')) &&
             (val.startsWith('javascript:') || val.startsWith('vbscript:') || (val.startsWith('data:') && !val.startsWith('data:image/')))
           ) {
             el.setAttribute(attr.name, '#');
@@ -86,7 +88,8 @@ export function sanitizeHtml(rawHtml: string): string {
   // Robust fallback for non-DOM environments
   return rawHtml
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/<\/?(iframe|object|embed|base|meta|form|input|textarea|button|select|frame|frameset|applet|link|style)\b[^>]*>/gi, '')
+    .replace(/<\/?(iframe|object|embed|base|meta|form|input|textarea|button|select|frame|frameset|applet|link|style|svg|math|template|noscript)\b[^>]*>/gi, '')
     .replace(/\bon\w+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '')
+    .replace(/(?:srcdoc|formaction)\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '')
     .replace(/(?:href|src|action)\s*=\s*["']?\s*(?:javascript|vbscript):[^"'>]*/gi, 'href="#"');
 }

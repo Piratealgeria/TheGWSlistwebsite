@@ -7,6 +7,8 @@ export interface PostMetadata {
   thumbnail?: string;
   videoUrl?: string | null;
   excerpt?: string;
+  trackCount?: number;
+  previewTracks?: string[];
   tags?: string[];
   content?: string;
 }
